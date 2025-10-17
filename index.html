@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Lucho & Caro — Busca tu mesa</title>
+<style>
+body{font-family:'Quicksand',sans-serif;background:linear-gradient(180deg,#f0f9ff,#ecfdf5,#fffbeb);margin:0;padding:0;text-align:center;color:#0f172a}
+header{padding:40px 20px}
+h1{font-size:2em;margin:0}
+.container{max-width:600px;margin:0 auto;padding:20px}
+input{width:100%;padding:10px 12px;font-size:16px;border:1px solid #cbd5e1;border-radius:12px;margin-top:12px}
+.result{margin-top:10px;padding:10px;border:1px solid #e2e8f0;border-radius:12px;background:#fff}
+footer{font-size:13px;color:#64748b;margin:40px 0}
+</style>
+</head>
+<body>
+<header>
+  <h1>Lucho &amp; Caro 💛</h1>
+  <p>📅 18 de octubre de 2025 • 📍 Casino de Pimentel, Perú</p>
+  <p><strong>Tu mesa es…</strong> encuéntrala al toque ✨</p>
+</header>
+<div class="container">
+  <input id="search" placeholder="Escribe tu nombre y apellidos…" />
+  <div id="results"></div>
+</div>
+<footer>
+¿No encuentras tu nombre? Acércate al personal y te ayudamos con una sonrisa ☺️
+</footer>
+
+<script>
+const guests=[
+{name:"Carolina Barrios",table:"1"},
+{name:"Luis Rodríguez",table:"1"},
+{name:"Rafael Rodríguez",table:"2"},
+{name:"María Fernanda",table:"2"},
+{name:"Javier Ugarte",table:"3"},
+{name:"Ana Lucía",table:"3"}
+];
+const norm=s=>s.normalize('NFD').replace(/\\p{Diacritic}/gu,'').toLowerCase().trim();
+const search=document.getElementById('search');
+const results=document.getElementById('results');
+search.addEventListener('input',()=>{
+ const q=norm(search.value);
+ results.innerHTML='';
+ if(!q)return;
+ const found=guests.filter(g=>norm(g.name).includes(q));
+ if(!found.length){results.innerHTML='<p>No encontramos ese nombre 💬</p>';return;}
+ found.forEach(g=>{
+  const div=document.createElement('div');
+  div.className='result';
+  div.innerHTML=`<strong>${g.name}</strong><br>Mesa ${g.table}`;
+  results.appendChild(div);
+ });
+});
+</script>
+</body>
+</html>
