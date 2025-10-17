@@ -71,118 +71,165 @@
 <footer>
   ¿No encuentras tu nombre? Acércate al personal y te ayudamos con una sonrisa ☺️
 </footer>
-
 <script>
   // ---------- Utils ----------
-  const norm = s => s.normalize('NFD').replace(/\p{Diacritic}/gu,'').toLowerCase().trim();
+  const norm = s => (s || "")
+    .normalize("NFD").replace(/\p{Diacritic}/gu, "")
+    .toLowerCase().trim();
   const $ = id => document.getElementById(id);
 
   // ---------- State ----------
-  let guests = []; // array of {name, table}
+  let guests = []; // [{name, table}]
 
   // ---------- CSV helpers ----------
   function parseCSV(text){
-    const lines = text.split(/\r?\n/).filter(Boolean);
+    const lines = text.split(/\r?\n/);
     if (lines.length <= 1) return [];
-    const hdr = lines[0].split(',').map(h => norm(h));
-    const ni = hdr.findIndex(h => h.includes('nombre') || h.includes('guest') || h.includes('invitado'));
-    const ti = hdr.findIndex(h => h.includes('mesa') || h.includes('table'));
+    const hdr = lines[0].split(",").map(h => norm(h));
+    const ni = hdr.findIndex(h => h.includes("nombre") || h.includes("guest") || h.includes("invitado"));
+    const ti = hdr.findIndex(h => h.includes("mesa") || h.includes("table"));
     if (ni === -1 || ti === -1) return [];
     const out = [];
     for (let i = 1; i < lines.length; i++){
-      const cols = lines[i].split(',');
-      const name = (cols[ni] || '').trim();
-      const table = (cols[ti] || '').trim();
-      if (name && table) out.push({ name, table });
+      if (!lines[i].trim()) continue;
+      const cols = lines[i].split(",");
+      const name = (cols[ni] || "").trim();
+      // keep blanks if not assigned yet
+      const table = (cols[ti] || "").trim();
+      if (name) out.push({ name, table });
     }
     return out;
   }
+
   function toCSV(list){
-    const header = 'nombre,mesa\\n';
-    const rows = list.map(g => `${g.name},${g.table}`).join('\\n');
+    const header = "nombre,mesa\n";
+    const rows = list.map(g => `${g.name},${g.table || ""}`).join("\n");
     return header + rows;
   }
 
-  // ---------- Render: Search ----------
-  const search = $('search'), results = $('results'), tip = $('tip');
+  // ---------- Render helpers ----------
+  function formatTableLabel(t){
+    if (!t) return "Sin mesa (por asignar)";
+    // if already like "Mesa 10", keep; if "10", prefix "Mesa"
+    return /^mesa\s*/i.test(t) ? t : `Mesa ${t}`;
+  }
+  function tableSortKey(t){
+    if (!t) return Infinity;
+    const num = parseInt(String(t).replace(/[^\d]/g, ""), 10);
+    return Number.isFinite(num) ? num : Infinity;
+  }
+
+  // ---------- Search ----------
+  const search = $("search"), results = $("results"), tip = $("tip");
   function renderResults(){
-    const q = norm(search.value || '');
-    results.innerHTML = '';
-    tip.style.display = (!q || q.length >= 3) ? 'none' : '';
+    const q = norm(search.value);
+    results.innerHTML = "";
+    tip.style.display = (!q || q.length >= 3) ? "none" : "";
     if (!q) return;
-    const found = guests.filter(g => norm(g.name).includes(q)).sort((a,b)=>a.name.localeCompare(b.name));
+    const found = guests
+      .filter(g => norm(g.name).includes(q))
+      .sort((a,b)=> a.name.localeCompare(b.name, "es"));
     if (!found.length){
       results.innerHTML = '<p class="hint" style="font-size:14px">No encontramos ese nombre. Revisa ortografía o acércate al personal 💬</p>';
       return;
     }
     found.slice(0,50).forEach(g => {
-      const row = document.createElement('div');
-      row.className = 'result';
-      row.innerHTML = `<div><strong>${g.name}</strong><br>Tu mesa: <b>${g.table}</b></div>
-                       <button class="btn" onclick="navigator.clipboard.writeText('${g.name} — Mesa ${g.table}')">Copiar</button>`;
+      const row = document.createElement("div");
+      row.className = "result";
+      row.innerHTML = `<div><strong>${g.name}</strong><br>Tu mesa: <b>${formatTableLabel(g.table)}</b></div>
+                       <button class="btn" onclick="navigator.clipboard.writeText('${g.name} — ${formatTableLabel(g.table)}')">Copiar</button>`;
       results.appendChild(row);
     });
     if (found.length > 50){
-      const p = document.createElement('p');
-      p.className = 'hint'; p.textContent = 'Mostrando 50 resultados. Afina tu búsqueda para ver menos.';
+      const p = document.createElement("p");
+      p.className = "hint"; p.textContent = "Mostrando 50 resultados. Afina tu búsqueda para ver menos.";
       results.appendChild(p);
     }
   }
-  search.addEventListener('input', renderResults);
-  $('clear').addEventListener('click', ()=>{ search.value=''; results.innerHTML=''; search.focus(); });
+  search.addEventListener("input", renderResults);
+  $("clear").addEventListener("click", ()=>{ search.value=""; results.innerHTML=""; search.focus(); });
 
-  // ---------- Render: List by table ----------
-  const tablesDiv = $('tables');
+  // ---------- List by table ----------
+  const tablesDiv = $("tables");
   function renderTables(){
-    tablesDiv.innerHTML = '';
+    tablesDiv.innerHTML = "";
     const map = {};
-    guests.forEach(g => { (map[g.table] ||= []).push(g); });
-    Object.keys(map).sort((a,b)=>Number(a)-Number(b)).forEach(t=>{
-      const card = document.createElement('div');
-      card.className = 'card';
-      const body = document.createElement('div'); body.className = 'card-body';
-      body.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
-                          <h3>Mesa ${t}</h3>
-                          <button class="btn" onclick="navigator.clipboard.writeText('Mesa ${t}')">📋 Copiar mesa</button>
-                        </div>
-                        <ul>${map[t].sort((a,b)=>a.name.localeCompare(b.name)).map(p=>`<li>${p.name}</li>`).join('')}</ul>`;
-      card.appendChild(body); tablesDiv.appendChild(card);
-    });
+    guests.forEach(g => { (map[g.table || ""]) ||= []; (map[g.table || ""]).push(g); });
+
+    Object.keys(map)
+      .sort((a,b)=> tableSortKey(a) - tableSortKey(b))
+      .forEach(t=>{
+        const card = document.createElement("div");
+        card.className = "card";
+        const body = document.createElement("div"); body.className = "card-body";
+        body.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+                            <h3>${formatTableLabel(t)}</h3>
+                            <button class="btn" onclick="navigator.clipboard.writeText('${formatTableLabel(t)}')">📋 Copiar mesa</button>
+                          </div>
+                          <ul>${map[t].sort((a,b)=> a.name.localeCompare(b.name, "es")).map(p=>`<li>${p.name}</li>`).join("")}</ul>`;
+        card.appendChild(body); tablesDiv.appendChild(card);
+      });
   }
+  // expose for refresh after load
+  window.renderTables = renderTables;
 
   // ---------- Tabs ----------
-  const tabSearch = $('tab-search'), tabList = $('tab-list');
-  const secSearch = $('search-section'), secList = $('list-section');
-  tabSearch.addEventListener('click', ()=>{
-    tabSearch.classList.add('primary'); tabList.classList.remove('primary');
-    secSearch.style.display=''; secList.style.display='none'; search.focus();
+  const tabSearch = $("tab-search"), tabList = $("tab-list");
+  const secSearch = $("search-section"), secList = $("list-section");
+  tabSearch.addEventListener("click", ()=>{
+    tabSearch.classList.add("primary"); tabList.classList.remove("primary");
+    secSearch.style.display=""; secList.style.display="none"; search.focus();
   });
-  tabList.addEventListener('click', ()=>{
-    tabList.classList.add('primary'); tabSearch.classList.remove('primary');
-    secSearch.style.display='none'; secList.style.display='';
+  tabList.addEventListener("click", ()=>{
+    tabList.classList.add("primary"); tabSearch.classList.remove("primary");
+    secSearch.style.display="none"; secList.style.display="";
     renderTables();
   });
 
-  // ---------- CSV panel (optional, para pruebas rápidas) ----------
-  $('btn-parse').addEventListener('click', ()=>{
-    const parsed = parseCSV($('csv').value);
-    if (parsed.length){ guests = parsed; renderResults(); if (secList.style.display !== 'none') renderTables(); alert('Lista actualizada ✔️'); }
-    else alert('No se pudo leer el CSV. Verifica encabezados: nombre, mesa.');
+  // ---------- Remove old CSV panel hooks (in case elements don't exist) ----------
+  const btnParse = document.getElementById("btn-parse");
+  const btnDownload = document.getElementById("btn-download");
+  if (btnParse) btnParse.addEventListener("click", ()=>{
+    const parsed = parseCSV($("csv").value);
+    if (parsed.length){ guests = parsed; renderResults(); if (secList.style.display !== "none") renderTables(); alert("Lista actualizada ✔️"); }
+    else alert("No se pudo leer el CSV. Verifica encabezados: nombre, mesa.");
   });
-  $('btn-download').addEventListener('click', ()=>{
-    const blob = new Blob([toCSV(guests)], {type:'text/csv'});
-    const url = URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='mesas.csv'; a.click(); URL.revokeObjectURL(url);
+  if (btnDownload) btnDownload.addEventListener("click", ()=>{
+    const blob = new Blob([toCSV(guests)], {type:"text/csv"});
+    const url = URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download="mesas.csv"; a.click(); URL.revokeObjectURL(url);
   });
 
-  // ---------- Load data ----------
-  // Intenta cargar mesas.csv del repo; si no existe, usa datos de muestra
-  fetch('mesas.csv').then(r => { if(!r.ok) throw 0; return r.text(); })
-    .then(txt => { guests = parseCSV(txt); })
-    .catch(()=>{ guests = [
-      {name:'Carolina Barrios',table:'1'},{name:'Luis Rodríguez',table:'1'},
-      {name:'Rafael Rodríguez',table:'2'},{name:'María Fernanda',table:'2'},
-      {name:'Javier Ugarte',table:'3'},{name:'Ana Lucía',table:'3'}
-    ]; });
+  // ---------- Load data (robust + no-cache) ----------
+  const CSV_PATHS = [
+    "mesas.csv",
+    `${location.pathname.replace(/[^/]+$/, "")}mesas.csv`,
+    // raw GitHub fallback (replace user/repo if you fork)
+    "https://raw.githubusercontent.com/daguinaga/mesas-lucho-caro/main/mesas.csv"
+  ];
+
+  async function loadCSV() {
+    for (const url of CSV_PATHS) {
+      try {
+        const res = await fetch(url, { cache: "no-store" });
+        if (!res.ok) continue;
+        const txt = await res.text();
+        const parsed = parseCSV(txt);
+        if (parsed.length) {
+          guests = parsed;
+          // Re-render current view
+          if (secList.style.display === "none") {
+            search.dispatchEvent(new Event("input"));
+          } else {
+            renderTables();
+          }
+          return;
+        }
+      } catch (e) { /* try next path */ }
+    }
+    console.warn("No se pudo cargar mesas.csv desde ninguna ruta.");
+  }
+
+  loadCSV();
 </script>
 </body>
 </html>
