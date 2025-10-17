@@ -13,6 +13,7 @@
   header{text-align:center;padding:42px 16px 18px}
   h1{margin:0;font-size:clamp(28px,4vw,40px)}
   .sub{color:var(--muted);margin-top:6px}
+  .sub > div{line-height:1.25}
   .tag{display:inline-block;margin-top:10px}
   .wrap{max-width:860px;margin:0 auto;padding:0 16px 36px}
   .tabs{display:flex;gap:8px;justify-content:center;margin:18px 0 22px;flex-wrap:wrap}
@@ -26,6 +27,13 @@
   .ghost{border:none;background:transparent;font-weight:600;color:#334155;cursor:pointer}
   .results{margin-top:12px;display:grid;gap:10px}
   .result{display:flex;justify-content:space-between;align-items:flex-start;border:1px solid var(--br);background:#fff;border-radius:12px;padding:12px 14px}
+  .result.clickable{cursor:pointer}
+  @keyframes flash {
+    0%{box-shadow:0 0 0 0 rgba(14,165,233,.0)}
+    30%{box-shadow:0 0 0 6px rgba(14,165,233,.15)}
+    100%{box-shadow:0 0 0 0 rgba(14,165,233,.0)}
+  }
+  .flash { animation: flash 1.2s ease-out 1; }
   .grid{display:grid;gap:14px}
   @media(min-width:640px){.grid{grid-template-columns:1fr 1fr}}
   h3{margin:0;font-size:18px}
@@ -37,10 +45,9 @@
 <body>
 <header>
   <h1>Lucho &amp; Caro 💛</h1>
-  <!-- Fecha y lugar en dos líneas -->
   <div class="sub">
+    <div>📅 18 de octubre de 2025</div>
     <div>📍 Casino de Pimentel, Perú</div>
-    <div>📆 18 de octubre de 2025</div>
   </div>
   <div class="tag"><strong>Tu mesa es…</strong> encuéntrala al toque ✨</div>
   <div class="tabs">
@@ -73,16 +80,12 @@
 </footer>
 
 <script>
-  // ---------- Utils ----------
   const norm = s => (s || "")
     .normalize("NFD").replace(/\p{Diacritic}/gu, "")
     .toLowerCase().trim();
   const $ = id => document.getElementById(id);
+  let guests = [];
 
-  // ---------- State ----------
-  let guests = []; // [{name, table}]
-
-  // ---------- CSV helpers (comma OR tab) ----------
   function parseCSV(text){
     const lines = text.split(/\r?\n/).filter(l => l.trim().length);
     if (lines.length <= 1) return [];
@@ -90,7 +93,6 @@
     const ni = hdr.findIndex(h => h.includes("nombre") || h.includes("guest") || h.includes("invitado"));
     const ti = hdr.findIndex(h => h.includes("mesa") || h.includes("table"));
     if (ni === -1 || ti === -1) return [];
-
     const out = [];
     for (let i = 1; i < lines.length; i++){
       const cols = lines[i].split(/,|\t/);
@@ -102,25 +104,11 @@
     return out;
   }
 
-  // Extract just the mesa number (as string). Returns "" if none.
   function tableNumber(raw){
     const m = String(raw || "").match(/\d+/);
     return m ? m[0] : "";
   }
 
-  // Card label for tables
-  function tableLabelFrom(raw){
-    const n = tableNumber(raw);
-    return n ? `Mesa ${n}` : ""; // empty means "skip this table"
-  }
-
-  // Numeric sort of mesa ("" goes last / skipped anyway)
-  function tableSortKey(raw){
-    const n = tableNumber(raw);
-    return n ? parseInt(n, 10) : Number.POSITIVE_INFINITY;
-  }
-
-  // ---------- Search ----------
   const search = $("search"), results = $("results"), tip = $("tip");
   function renderResults(){
     const q = norm(search.value);
@@ -128,21 +116,23 @@
     tip.style.display = (!q || q.length >= 3) ? "none" : "";
     if (!q) return;
 
-    // exclude guests without mesa number
     const found = guests
-      .filter(g => tableNumber(g.table))           // only assigned
+      .filter(g => tableNumber(g.table))
       .filter(g => norm(g.name).includes(q))
       .sort((a,b)=> a.name.localeCompare(b.name, "es"));
 
     if (!found.length){
-      results.innerHTML = '<p class="hint" style="font-size:14px">No encontramos ese nombre. Revisa ortografía o acércate al personal 💬</p>';
+      results.innerHTML = '<p class="hint" style="font-size:14px">No encontramos ese nombre. Revisa la ortografía o avísanos y te ayudamos 💬</p>';
       return;
     }
 
     found.slice(0,50).forEach(g => {
       const num = tableNumber(g.table);
       const row = document.createElement("div");
-      row.className = "result";
+      row.className = "result clickable";
+      row.dataset.table = num;
+      row.setAttribute("role","button");
+      row.setAttribute("tabindex","0");
       row.innerHTML = `
         <div>
           <strong>${g.name}</strong><br>
@@ -160,24 +150,22 @@
   search.addEventListener("input", renderResults);
   $("clear").addEventListener("click", ()=>{ search.value=""; results.innerHTML=""; search.focus(); });
 
-  // ---------- List by table ----------
   const tablesDiv = $("tables");
   function renderTables(){
     tablesDiv.innerHTML = "";
-
-    // group by mesa number; skip blanks entirely
     const map = {};
     for (const g of guests) {
       const num = tableNumber(g.table);
-      if (!num) continue;               // skip unassigned
+      if (!num) continue;
       (map[num] ||= []).push(g);
     }
 
     Object.keys(map)
-      .sort((a,b)=> parseInt(a,10) - parseInt(b,10)) // numeric order
+      .sort((a,b)=> parseInt(a,10) - parseInt(b,10))
       .forEach(num=>{
         const card = document.createElement("div");
         card.className = "card";
+        card.id = `table-${num}`;
         const body = document.createElement("div");
         body.className = "card-body";
         body.innerHTML = `
@@ -195,7 +183,6 @@
   }
   window.renderTables = renderTables;
 
-  // ---------- Tabs ----------
   const tabSearch = $("tab-search"), tabList = $("tab-list");
   const secSearch = $("search-section"), secList = $("list-section");
   tabSearch.addEventListener("click", ()=>{
@@ -208,11 +195,35 @@
     renderTables();
   });
 
-  // ---------- Robust CSV Loader (auto path + no-cache) ----------
+  // Click on result → go to table
+  results.addEventListener("click", e=>{
+    const row = e.target.closest(".result.clickable");
+    if (!row) return;
+    const num = row.dataset.table;
+    if (!num) return;
+    tabList.classList.add("primary");
+    tabSearch.classList.remove("primary");
+    secSearch.style.display="none";
+    secList.style.display="";
+    renderTables();
+    requestAnimationFrame(()=>{
+      const el = document.getElementById(`table-${num}`);
+      if (el) {
+        el.scrollIntoView({behavior:"smooth",block:"start"});
+        el.classList.add("flash");
+        setTimeout(()=> el.classList.remove("flash"),1300);
+      }
+    });
+  });
+  results.addEventListener("keydown",(e)=>{
+    if (e.key!=="Enter" && e.key!==" ") return;
+    const row=e.target.closest(".result.clickable");
+    if (row){ e.preventDefault(); row.click(); }
+  });
+
   function buildPaths(){
     const folder = location.pathname.replace(/[^/]+$/, "");
     const paths = [ `${folder}mesas.csv`, "mesas.csv" ];
-    // raw.githubusercontent fallback if on GitHub Pages
     const hostParts = location.hostname.split(".");
     const pathParts = location.pathname.split("/").filter(Boolean);
     if (hostParts[1] === "github" && hostParts[2] === "io" && pathParts.length >= 1) {
@@ -229,7 +240,6 @@
         if (!res.ok) continue;
         const txt = await res.text();
         let parsed = parseCSV(txt);
-        // remove anyone without mesa number
         parsed = parsed.filter(g => tableNumber(g.table));
         if (parsed.length) {
           guests = parsed;
@@ -242,7 +252,6 @@
         }
       } catch(e) {}
     }
-    // If nothing loaded, render empty states
     renderResults(); renderTables();
     console.warn("No se pudo cargar mesas.csv desde ninguna ruta.");
   }
