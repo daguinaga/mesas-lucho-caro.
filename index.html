@@ -4,55 +4,202 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>Lucho & Caro — Busca tu mesa</title>
+<meta name="description" content="Encuentra tu mesa al toque para la boda de Lucho & Caro" />
 <style>
-body{font-family:'Quicksand',sans-serif;background:linear-gradient(180deg,#f0f9ff,#ecfdf5,#fffbeb);margin:0;padding:0;text-align:center;color:#0f172a}
-header{padding:40px 20px}
-h1{font-size:2em;margin:0}
-.container{max-width:600px;margin:0 auto;padding:20px}
-input{width:100%;padding:10px 12px;font-size:16px;border:1px solid #cbd5e1;border-radius:12px;margin-top:12px}
-.result{margin-top:10px;padding:10px;border:1px solid #e2e8f0;border-radius:12px;background:#fff}
-footer{font-size:13px;color:#64748b;margin:40px 0}
+  :root{--ink:#0f172a;--muted:#475569;--card:#fff;--bg1:#f0f9ff;--bg2:#ecfdf5;--bg3:#fffbeb;--br:#e2e8f0;--radius:14px}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:var(--ink);
+       background:linear-gradient(180deg,var(--bg1),var(--bg2),var(--bg3));}
+  header{text-align:center;padding:42px 16px 18px}
+  h1{margin:0;font-size:clamp(28px,4vw,40px)}
+  .sub{color:var(--muted);margin-top:6px}
+  .tag{display:inline-block;margin-top:10px}
+  .wrap{max-width:860px;margin:0 auto;padding:0 16px 36px}
+  .tabs{display:flex;gap:8px;justify-content:center;margin:18px 0 22px;flex-wrap:wrap}
+  .btn{border:1px solid var(--br);background:#fff;border-radius:999px;padding:10px 14px;font-weight:600;cursor:pointer}
+  .btn.primary{background:#0284c7;color:#fff;border:none}
+  .card{background:var(--card);border:1px solid var(--br);border-radius:var(--radius);box-shadow:0 8px 28px rgba(2,8,23,.06)}
+  .card-body{padding:16px}
+  .row{display:flex;gap:10px}
+  .input{flex:1;height:44px;border:1px solid #cbd5e1;border-radius:12px;padding:0 12px;font-size:16px;outline:none}
+  .input:focus{border-color:#0ea5e9;box-shadow:0 0 0 3px rgba(14,165,233,.18)}
+  .ghost{border:none;background:transparent;font-weight:600;color:#334155;cursor:pointer}
+  .results{margin-top:12px;display:grid;gap:10px}
+  .result{display:flex;justify-content:space-between;align-items:center;border:1px solid var(--br);background:#fff;border-radius:12px;padding:10px 12px}
+  .grid{display:grid;gap:14px}
+  @media(min-width:640px){.grid{grid-template-columns:1fr 1fr}}
+  h3{margin:0;font-size:18px}
+  ul{margin:10px 0 0;padding:0;list-style:none;display:grid;gap:6px}
+  .hint{color:#64748b;font-size:12px;margin-top:8px}
+  details summary{cursor:pointer;display:inline-flex;gap:8px;border:1px solid var(--br);border-radius:12px;background:#fff;padding:8px 12px}
+  textarea{width:100%;height:160px;border:1px solid #cbd5e1;border-radius:12px;padding:8px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px}
+  footer{text-align:center;color:#64748b;font-size:12px;padding:24px 16px 36px}
 </style>
 </head>
 <body>
 <header>
   <h1>Lucho &amp; Caro 💛</h1>
-  <p>📅 18 de octubre de 2025 • 📍 Casino de Pimentel, Perú</p>
-  <p><strong>Tu mesa es…</strong> encuéntrala al toque ✨</p>
+  <div class="sub">📅 18 de octubre de 2025 • 📍 Casino de Pimentel, Perú</div>
+  <div class="tag"><strong>Tu mesa es…</strong> encuéntrala al toque ✨</div>
+  <div class="tabs">
+    <button id="tab-search" class="btn primary">🔎 Buscar por nombre</button>
+    <button id="tab-list" class="btn">📋 Ver lista por mesas</button>
+  </div>
 </header>
-<div class="container">
-  <input id="search" placeholder="Escribe tu nombre y apellidos…" />
-  <div id="results"></div>
-</div>
+
+<main class="wrap">
+  <!-- SEARCH -->
+  <section id="search-section">
+    <div class="card"><div class="card-body">
+      <div class="row">
+        <input id="search" class="input" placeholder="Escribe tu nombre y apellidos…" />
+        <button id="clear" class="ghost">Limpiar</button>
+      </div>
+      <div id="results" class="results"></div>
+      <p id="tip" class="hint" style="display:none">Sugerencia: escribe al menos 3 letras para mejores resultados.</p>
+    </div></div>
+  </section>
+
+  <!-- LIST -->
+  <section id="list-section" style="display:none">
+    <div id="tables" class="grid"></div>
+  </section>
+
+  <!-- CSV (opcional para admins) -->
+  <section style="margin-top:22px">
+    <details>
+      <summary>⬆️ Cargar lista (CSV)</summary>
+      <div class="card" style="margin-top:10px"><div class="card-body">
+        <p class="hint" style="margin:0 0 8px">Formato: encabezados <b>nombre,mesa</b>. Ejemplo rápido abajo.</p>
+        <textarea id="csv">nombre,mesa
+María López,1
+Carlos García,1
+Ana Torres,2
+Jorge Pérez,3</textarea>
+        <div class="row" style="margin-top:8px">
+          <button id="btn-parse" class="btn primary">Actualizar lista</button>
+          <button id="btn-download" class="btn">⬇️ Descargar CSV actual</button>
+        </div>
+      </div></div>
+    </details>
+  </section>
+</main>
+
 <footer>
-¿No encuentras tu nombre? Acércate al personal y te ayudamos con una sonrisa ☺️
+  ¿No encuentras tu nombre? Acércate al personal y te ayudamos con una sonrisa ☺️
 </footer>
 
 <script>
-const guests=[
-{name:"Carolina Barrios",table:"1"},
-{name:"Luis Rodríguez",table:"1"},
-{name:"Rafael Rodríguez",table:"2"},
-{name:"María Fernanda",table:"2"},
-{name:"Javier Ugarte",table:"3"},
-{name:"Ana Lucía",table:"3"}
-];
-const norm=s=>s.normalize('NFD').replace(/\\p{Diacritic}/gu,'').toLowerCase().trim();
-const search=document.getElementById('search');
-const results=document.getElementById('results');
-search.addEventListener('input',()=>{
- const q=norm(search.value);
- results.innerHTML='';
- if(!q)return;
- const found=guests.filter(g=>norm(g.name).includes(q));
- if(!found.length){results.innerHTML='<p>No encontramos ese nombre 💬</p>';return;}
- found.forEach(g=>{
-  const div=document.createElement('div');
-  div.className='result';
-  div.innerHTML=`<strong>${g.name}</strong><br>Mesa ${g.table}`;
-  results.appendChild(div);
- });
-});
+  // ---------- Utils ----------
+  const norm = s => s.normalize('NFD').replace(/\p{Diacritic}/gu,'').toLowerCase().trim();
+  const $ = id => document.getElementById(id);
+
+  // ---------- State ----------
+  let guests = []; // array of {name, table}
+
+  // ---------- CSV helpers ----------
+  function parseCSV(text){
+    const lines = text.split(/\r?\n/).filter(Boolean);
+    if (lines.length <= 1) return [];
+    const hdr = lines[0].split(',').map(h => norm(h));
+    const ni = hdr.findIndex(h => h.includes('nombre') || h.includes('guest') || h.includes('invitado'));
+    const ti = hdr.findIndex(h => h.includes('mesa') || h.includes('table'));
+    if (ni === -1 || ti === -1) return [];
+    const out = [];
+    for (let i = 1; i < lines.length; i++){
+      const cols = lines[i].split(',');
+      const name = (cols[ni] || '').trim();
+      const table = (cols[ti] || '').trim();
+      if (name && table) out.push({ name, table });
+    }
+    return out;
+  }
+  function toCSV(list){
+    const header = 'nombre,mesa\\n';
+    const rows = list.map(g => `${g.name},${g.table}`).join('\\n');
+    return header + rows;
+  }
+
+  // ---------- Render: Search ----------
+  const search = $('search'), results = $('results'), tip = $('tip');
+  function renderResults(){
+    const q = norm(search.value || '');
+    results.innerHTML = '';
+    tip.style.display = (!q || q.length >= 3) ? 'none' : '';
+    if (!q) return;
+    const found = guests.filter(g => norm(g.name).includes(q)).sort((a,b)=>a.name.localeCompare(b.name));
+    if (!found.length){
+      results.innerHTML = '<p class="hint" style="font-size:14px">No encontramos ese nombre. Revisa ortografía o acércate al personal 💬</p>';
+      return;
+    }
+    found.slice(0,50).forEach(g => {
+      const row = document.createElement('div');
+      row.className = 'result';
+      row.innerHTML = `<div><strong>${g.name}</strong><br>Tu mesa: <b>${g.table}</b></div>
+                       <button class="btn" onclick="navigator.clipboard.writeText('${g.name} — Mesa ${g.table}')">Copiar</button>`;
+      results.appendChild(row);
+    });
+    if (found.length > 50){
+      const p = document.createElement('p');
+      p.className = 'hint'; p.textContent = 'Mostrando 50 resultados. Afina tu búsqueda para ver menos.';
+      results.appendChild(p);
+    }
+  }
+  search.addEventListener('input', renderResults);
+  $('clear').addEventListener('click', ()=>{ search.value=''; results.innerHTML=''; search.focus(); });
+
+  // ---------- Render: List by table ----------
+  const tablesDiv = $('tables');
+  function renderTables(){
+    tablesDiv.innerHTML = '';
+    const map = {};
+    guests.forEach(g => { (map[g.table] ||= []).push(g); });
+    Object.keys(map).sort((a,b)=>Number(a)-Number(b)).forEach(t=>{
+      const card = document.createElement('div');
+      card.className = 'card';
+      const body = document.createElement('div'); body.className = 'card-body';
+      body.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+                          <h3>Mesa ${t}</h3>
+                          <button class="btn" onclick="navigator.clipboard.writeText('Mesa ${t}')">📋 Copiar mesa</button>
+                        </div>
+                        <ul>${map[t].sort((a,b)=>a.name.localeCompare(b.name)).map(p=>`<li>${p.name}</li>`).join('')}</ul>`;
+      card.appendChild(body); tablesDiv.appendChild(card);
+    });
+  }
+
+  // ---------- Tabs ----------
+  const tabSearch = $('tab-search'), tabList = $('tab-list');
+  const secSearch = $('search-section'), secList = $('list-section');
+  tabSearch.addEventListener('click', ()=>{
+    tabSearch.classList.add('primary'); tabList.classList.remove('primary');
+    secSearch.style.display=''; secList.style.display='none'; search.focus();
+  });
+  tabList.addEventListener('click', ()=>{
+    tabList.classList.add('primary'); tabSearch.classList.remove('primary');
+    secSearch.style.display='none'; secList.style.display='';
+    renderTables();
+  });
+
+  // ---------- CSV panel (optional, para pruebas rápidas) ----------
+  $('btn-parse').addEventListener('click', ()=>{
+    const parsed = parseCSV($('csv').value);
+    if (parsed.length){ guests = parsed; renderResults(); if (secList.style.display !== 'none') renderTables(); alert('Lista actualizada ✔️'); }
+    else alert('No se pudo leer el CSV. Verifica encabezados: nombre, mesa.');
+  });
+  $('btn-download').addEventListener('click', ()=>{
+    const blob = new Blob([toCSV(guests)], {type:'text/csv'});
+    const url = URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='mesas.csv'; a.click(); URL.revokeObjectURL(url);
+  });
+
+  // ---------- Load data ----------
+  // Intenta cargar mesas.csv del repo; si no existe, usa datos de muestra
+  fetch('mesas.csv').then(r => { if(!r.ok) throw 0; return r.text(); })
+    .then(txt => { guests = parseCSV(txt); })
+    .catch(()=>{ guests = [
+      {name:'Carolina Barrios',table:'1'},{name:'Luis Rodríguez',table:'1'},
+      {name:'Rafael Rodríguez',table:'2'},{name:'María Fernanda',table:'2'},
+      {name:'Javier Ugarte',table:'3'},{name:'Ana Lucía',table:'3'}
+    ]; });
 </script>
 </body>
 </html>
