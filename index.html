@@ -25,14 +25,12 @@
   .input:focus{border-color:#0ea5e9;box-shadow:0 0 0 3px rgba(14,165,233,.18)}
   .ghost{border:none;background:transparent;font-weight:600;color:#334155;cursor:pointer}
   .results{margin-top:12px;display:grid;gap:10px}
-  .result{display:flex;justify-content:space-between;align-items:center;border:1px solid var(--br);background:#fff;border-radius:12px;padding:10px 12px}
+  .result{display:flex;justify-content:space-between;align-items:flex-start;border:1px solid var(--br);background:#fff;border-radius:12px;padding:12px 14px}
   .grid{display:grid;gap:14px}
   @media(min-width:640px){.grid{grid-template-columns:1fr 1fr}}
   h3{margin:0;font-size:18px}
   ul{margin:10px 0 0;padding:0;list-style:none;display:grid;gap:6px}
   .hint{color:#64748b;font-size:12px;margin-top:8px}
-  details summary{cursor:pointer;display:inline-flex;gap:8px;border:1px solid var(--br);border-radius:12px;background:#fff;padding:8px 12px}
-  textarea{width:100%;height:160px;border:1px solid #cbd5e1;border-radius:12px;padding:8px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px}
   footer{text-align:center;color:#64748b;font-size:12px;padding:24px 16px 36px}
 </style>
 </head>
@@ -64,13 +62,12 @@
   <section id="list-section" style="display:none">
     <div id="tables" class="grid"></div>
   </section>
-
-  <!-- CSV (opcional para admins) -->
 </main>
 
 <footer>
   ¿No encuentras tu nombre? Acércate al personal y te ayudamos con una sonrisa ☺️
 </footer>
+
 <script>
   // ---------- Utils ----------
   const norm = s => (s || "")
@@ -101,16 +98,22 @@
     return out;
   }
 
-  // Normalize mesa: keep only number; show as "Mesa N"; blanks allowed
-  function formatTableLabel(raw){
-    if (!raw) return "Sin mesa (por asignar)";
-    const n = String(raw).match(/\d+/);
-    return n ? `Mesa ${n[0]}` : "Sin mesa (por asignar)";
+  // Extract just the mesa number (as string). Returns "" if none.
+  function tableNumber(raw){
+    const m = String(raw || "").match(/\d+/);
+    return m ? m[0] : "";
   }
-  // Numeric sort of mesa (blanks last)
+
+  // Card label for tables
+  function tableLabelFrom(raw){
+    const n = tableNumber(raw);
+    return n ? `Mesa ${n}` : ""; // empty means "skip this table"
+  }
+
+  // Numeric sort of mesa ("" goes last / skipped anyway)
   function tableSortKey(raw){
-    const n = String(raw).match(/\d+/);
-    return n ? parseInt(n[0], 10) : Number.POSITIVE_INFINITY;
+    const n = tableNumber(raw);
+    return n ? parseInt(n, 10) : Number.POSITIVE_INFINITY;
   }
 
   // ---------- Search ----------
@@ -121,7 +124,9 @@
     tip.style.display = (!q || q.length >= 3) ? "none" : "";
     if (!q) return;
 
+    // exclude guests without mesa number
     const found = guests
+      .filter(g => tableNumber(g.table))           // only assigned
       .filter(g => norm(g.name).includes(q))
       .sort((a,b)=> a.name.localeCompare(b.name, "es"));
 
@@ -131,12 +136,13 @@
     }
 
     found.slice(0,50).forEach(g => {
+      const num = tableNumber(g.table);
       const row = document.createElement("div");
       row.className = "result";
       row.innerHTML = `
         <div>
           <strong>${g.name}</strong><br>
-          Tu mesa: <b>${formatTableLabel(g.table)}</b>
+          Tu mesa: <b>${num || "por asignar"}</b>
         </div>`;
       results.appendChild(row);
     });
@@ -150,32 +156,32 @@
   search.addEventListener("input", renderResults);
   $("clear").addEventListener("click", ()=>{ search.value=""; results.innerHTML=""; search.focus(); });
 
-  // ---------- List by table (cards: Mesa N; inside: names A–Z) ----------
+  // ---------- List by table ----------
   const tablesDiv = $("tables");
   function renderTables(){
     tablesDiv.innerHTML = "";
 
-    // group by mesa number key ('' for blanks)
+    // group by mesa number; skip blanks entirely
     const map = {};
     for (const g of guests) {
-      const key = formatTableLabel(g.table) === "Sin mesa (por asignar)" ? "" : (g.table || "");
-      (map[key] ||= []).push(g);
+      const num = tableNumber(g.table);
+      if (!num) continue;               // skip unassigned
+      (map[num] ||= []).push(g);
     }
 
     Object.keys(map)
-      .sort((a,b)=> tableSortKey(a) - tableSortKey(b)) // numeric; blanks last
-      .forEach(key=>{
-        const label = key ? `Mesa ${String(key).match(/\d+/)[0]}` : "Sin mesa (por asignar)";
+      .sort((a,b)=> parseInt(a,10) - parseInt(b,10)) // numeric order
+      .forEach(num=>{
         const card = document.createElement("div");
         card.className = "card";
         const body = document.createElement("div");
         body.className = "card-body";
         body.innerHTML = `
           <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
-            <h3>${label}</h3>
+            <h3>Mesa ${num}</h3>
           </div>
           <ul>${
-            map[key]
+            map[num]
               .sort((a,b)=> a.name.localeCompare(b.name, "es"))
               .map(p=> `<li>${p.name}</li>`).join("")
           }</ul>`;
@@ -198,7 +204,7 @@
     renderTables();
   });
 
-  // ---------- Load data (robust + no-cache + auto path) ----------
+  // ---------- Robust CSV Loader (auto path + no-cache) ----------
   function buildPaths(){
     const folder = location.pathname.replace(/[^/]+$/, "");
     const paths = [ `${folder}mesas.csv`, "mesas.csv" ];
@@ -218,7 +224,9 @@
         const res = await fetch(url, { cache: "no-store" });
         if (!res.ok) continue;
         const txt = await res.text();
-        const parsed = parseCSV(txt);
+        let parsed = parseCSV(txt);
+        // remove anyone without mesa number
+        parsed = parsed.filter(g => tableNumber(g.table));
         if (parsed.length) {
           guests = parsed;
           if (secList.style.display === "none") {
@@ -230,8 +238,9 @@
         }
       } catch(e) {}
     }
-    // fallback: still render empty state
+    // If nothing loaded, render empty states
     renderResults(); renderTables();
+    console.warn("No se pudo cargar mesas.csv desde ninguna ruta.");
   }
   loadCSV();
 </script>
