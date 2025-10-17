@@ -81,42 +81,36 @@
   // ---------- State ----------
   let guests = []; // [{name, table}]
 
-  // ---------- CSV helpers ----------
+  // ---------- CSV helpers (comma OR tab) ----------
   function parseCSV(text){
-    const lines = text.split(/\r?\n/);
+    const lines = text.split(/\r?\n/).filter(l => l.trim().length);
     if (lines.length <= 1) return [];
-    const hdr = lines[0].split(",").map(h => norm(h));
+    const hdr = lines[0].split(/,|\t/).map(h => norm(h));
     const ni = hdr.findIndex(h => h.includes("nombre") || h.includes("guest") || h.includes("invitado"));
     const ti = hdr.findIndex(h => h.includes("mesa") || h.includes("table"));
     if (ni === -1 || ti === -1) return [];
+
     const out = [];
     for (let i = 1; i < lines.length; i++){
-      if (!lines[i].trim()) continue;
-      const cols = lines[i].split(",");
+      const cols = lines[i].split(/,|\t/);
       const name = (cols[ni] || "").trim();
-      // keep blanks if not assigned yet
       const table = (cols[ti] || "").trim();
-      if (name) out.push({ name, table });
+      if (!name) continue;
+      out.push({ name, table });
     }
     return out;
   }
 
-  function toCSV(list){
-    const header = "nombre,mesa\n";
-    const rows = list.map(g => `${g.name},${g.table || ""}`).join("\n");
-    return header + rows;
+  // Normalize mesa: keep only number; show as "Mesa N"; blanks allowed
+  function formatTableLabel(raw){
+    if (!raw) return "Sin mesa (por asignar)";
+    const n = String(raw).match(/\d+/);
+    return n ? `Mesa ${n[0]}` : "Sin mesa (por asignar)";
   }
-
-  // ---------- Render helpers ----------
-  function formatTableLabel(t){
-    if (!t) return "Sin mesa (por asignar)";
-    // if already like "Mesa 10", keep; if "10", prefix "Mesa"
-    return /^mesa\s*/i.test(t) ? t : `Mesa ${t}`;
-  }
-  function tableSortKey(t){
-    if (!t) return Infinity;
-    const num = parseInt(String(t).replace(/[^\d]/g, ""), 10);
-    return Number.isFinite(num) ? num : Infinity;
+  // Numeric sort of mesa (blanks last)
+  function tableSortKey(raw){
+    const n = String(raw).match(/\d+/);
+    return n ? parseInt(n[0], 10) : Number.POSITIVE_INFINITY;
   }
 
   // ---------- Search ----------
@@ -126,20 +120,27 @@
     results.innerHTML = "";
     tip.style.display = (!q || q.length >= 3) ? "none" : "";
     if (!q) return;
+
     const found = guests
       .filter(g => norm(g.name).includes(q))
       .sort((a,b)=> a.name.localeCompare(b.name, "es"));
+
     if (!found.length){
       results.innerHTML = '<p class="hint" style="font-size:14px">No encontramos ese nombre. Revisa ortografía o acércate al personal 💬</p>';
       return;
     }
+
     found.slice(0,50).forEach(g => {
       const row = document.createElement("div");
       row.className = "result";
-      row.innerHTML = `<div><strong>${g.name}</strong><br>Tu mesa: <b>${formatTableLabel(g.table)}</b></div>
-                       <button class="btn" onclick="navigator.clipboard.writeText('${g.name} — ${formatTableLabel(g.table)}')">Copiar</button>`;
+      row.innerHTML = `
+        <div>
+          <strong>${g.name}</strong><br>
+          Tu mesa: <b>${formatTableLabel(g.table)}</b>
+        </div>`;
       results.appendChild(row);
     });
+
     if (found.length > 50){
       const p = document.createElement("p");
       p.className = "hint"; p.textContent = "Mostrando 50 resultados. Afina tu búsqueda para ver menos.";
@@ -149,28 +150,39 @@
   search.addEventListener("input", renderResults);
   $("clear").addEventListener("click", ()=>{ search.value=""; results.innerHTML=""; search.focus(); });
 
-  // ---------- List by table ----------
+  // ---------- List by table (cards: Mesa N; inside: names A–Z) ----------
   const tablesDiv = $("tables");
   function renderTables(){
     tablesDiv.innerHTML = "";
+
+    // group by mesa number key ('' for blanks)
     const map = {};
-    guests.forEach(g => { (map[g.table || ""]) ||= []; (map[g.table || ""]).push(g); });
+    for (const g of guests) {
+      const key = formatTableLabel(g.table) === "Sin mesa (por asignar)" ? "" : (g.table || "");
+      (map[key] ||= []).push(g);
+    }
 
     Object.keys(map)
-      .sort((a,b)=> tableSortKey(a) - tableSortKey(b))
-      .forEach(t=>{
+      .sort((a,b)=> tableSortKey(a) - tableSortKey(b)) // numeric; blanks last
+      .forEach(key=>{
+        const label = key ? `Mesa ${String(key).match(/\d+/)[0]}` : "Sin mesa (por asignar)";
         const card = document.createElement("div");
         card.className = "card";
-        const body = document.createElement("div"); body.className = "card-body";
-        body.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
-                            <h3>${formatTableLabel(t)}</h3>
-                            <button class="btn" onclick="navigator.clipboard.writeText('${formatTableLabel(t)}')">📋 Copiar mesa</button>
-                          </div>
-                          <ul>${map[t].sort((a,b)=> a.name.localeCompare(b.name, "es")).map(p=>`<li>${p.name}</li>`).join("")}</ul>`;
-        card.appendChild(body); tablesDiv.appendChild(card);
+        const body = document.createElement("div");
+        body.className = "card-body";
+        body.innerHTML = `
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+            <h3>${label}</h3>
+          </div>
+          <ul>${
+            map[key]
+              .sort((a,b)=> a.name.localeCompare(b.name, "es"))
+              .map(p=> `<li>${p.name}</li>`).join("")
+          }</ul>`;
+        card.appendChild(body);
+        tablesDiv.appendChild(card);
       });
   }
-  // expose for refresh after load
   window.renderTables = renderTables;
 
   // ---------- Tabs ----------
@@ -186,29 +198,22 @@
     renderTables();
   });
 
-  // ---------- Remove old CSV panel hooks (in case elements don't exist) ----------
-  const btnParse = document.getElementById("btn-parse");
-  const btnDownload = document.getElementById("btn-download");
-  if (btnParse) btnParse.addEventListener("click", ()=>{
-    const parsed = parseCSV($("csv").value);
-    if (parsed.length){ guests = parsed; renderResults(); if (secList.style.display !== "none") renderTables(); alert("Lista actualizada ✔️"); }
-    else alert("No se pudo leer el CSV. Verifica encabezados: nombre, mesa.");
-  });
-  if (btnDownload) btnDownload.addEventListener("click", ()=>{
-    const blob = new Blob([toCSV(guests)], {type:"text/csv"});
-    const url = URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download="mesas.csv"; a.click(); URL.revokeObjectURL(url);
-  });
-
-  // ---------- Load data (robust + no-cache) ----------
-  const CSV_PATHS = [
-    "mesas.csv",
-    `${location.pathname.replace(/[^/]+$/, "")}mesas.csv`,
-    // raw GitHub fallback (replace user/repo if you fork)
-    "https://raw.githubusercontent.com/daguinaga/mesas-lucho-caro/main/mesas.csv"
-  ];
+  // ---------- Load data (robust + no-cache + auto path) ----------
+  function buildPaths(){
+    const folder = location.pathname.replace(/[^/]+$/, "");
+    const paths = [ `${folder}mesas.csv`, "mesas.csv" ];
+    // raw.githubusercontent fallback if on GitHub Pages
+    const hostParts = location.hostname.split(".");
+    const pathParts = location.pathname.split("/").filter(Boolean);
+    if (hostParts[1] === "github" && hostParts[2] === "io" && pathParts.length >= 1) {
+      const owner = hostParts[0], repo = pathParts[0];
+      paths.push(`https://raw.githubusercontent.com/${owner}/${repo}/main/mesas.csv`);
+    }
+    return paths;
+  }
 
   async function loadCSV() {
-    for (const url of CSV_PATHS) {
+    for (const url of buildPaths()) {
       try {
         const res = await fetch(url, { cache: "no-store" });
         if (!res.ok) continue;
@@ -216,7 +221,6 @@
         const parsed = parseCSV(txt);
         if (parsed.length) {
           guests = parsed;
-          // Re-render current view
           if (secList.style.display === "none") {
             search.dispatchEvent(new Event("input"));
           } else {
@@ -224,11 +228,11 @@
           }
           return;
         }
-      } catch (e) { /* try next path */ }
+      } catch(e) {}
     }
-    console.warn("No se pudo cargar mesas.csv desde ninguna ruta.");
+    // fallback: still render empty state
+    renderResults(); renderTables();
   }
-
   loadCSV();
 </script>
 </body>
